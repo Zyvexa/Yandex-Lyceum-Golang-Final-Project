@@ -1,18 +1,32 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	pb "github.com/Zyvexa/grps_test/proto"
+	"github.com/golang-jwt/jwt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
+
+type User struct {
+	Login    string
+	Password string
+	Token    string
+}
 
 type TimeOperation struct {
 	TimeAddition       int `json:"timeAddition"`
@@ -20,6 +34,11 @@ type TimeOperation struct {
 	TimeMultiplication int `json:"timeMultiplication"`
 	TimeDivision       int `json:"timeDivision"`
 	TimeExponentiation int `json:"timeExponentiation"`
+}
+
+type Login struct {
+	Login    string `json:"login"`
+	Password string `json:"password"`
 }
 
 type Expression struct {
@@ -283,7 +302,6 @@ func ReadCalculations(filename string) ([]Data, error) {
 	return calculations, nil
 }
 
-// ReadServerAddresses считывает адреса серверов из указанного CSV файла.
 func ReadServerAddresses(filename string) ([]string, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -346,22 +364,48 @@ func SendJSONToServers(serverAddresses []string, calculations []Data) error {
 			if err != nil {
 				return err
 			}
+			// fmt.Println(string(jsonData))
 
-			resp, err := http.Post(serverAddress, "application/json", strings.NewReader(string(jsonData)))
+			// fmt.Println(serverAddress)
+			// установим соединение
+			// addr := strings.TrimPrefix(serverAddress, "http://")
+			// serverAddress := "http://localhost:9000/"
+			u, err := url.Parse(serverAddress)
 			if err != nil {
+				fmt.Println("Ошибка при разборе адреса:", err)
 				return err
 			}
-			resp.Body.Close()
+			host := u.Host
+			conn, err := grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+			if err != nil {
+				log.Println("could not connect to grpc server: ", err)
+				return err
+			}
+			// закроем соединение, когда выйдем из функции
+			defer conn.Close()
+			/// ..будет продолжение
+
+			grpcClient := pb.NewGeometryServiceClient(conn)
+
+			_, err = grpcClient.SendDataToAgent(context.TODO(), &pb.Data{
+				Json: string(jsonData),
+			})
+
+			if err != nil {
+				log.Println("Error: ", err)
+				return err
+			}
 
 			fmt.Printf("Отправлено JSON на %s: %s\n", serverAddress, string(jsonData))
 			break
+
 		}
 	}
 
 	return nil
 }
 
-// WriteCalculations записывает расчеты в указанный CSV файл.
 func WriteCalculations(filename string, calculations []Data) error {
 	file, err := os.Create(filename)
 	if err != nil {
@@ -436,7 +480,7 @@ func checkAndReplaceIndex(index int, filename string) (float64, error) {
 	return 0, fmt.Errorf("index not found")
 }
 
-func evaluationPostfix(postfix []string) float64 {
+func evaluationPostfix(postfix []string, token string) float64 {
 	var intStack Stack
 	for _, char := range postfix {
 		opchar := char
@@ -454,7 +498,7 @@ func evaluationPostfix(postfix []string) float64 {
 			case "^":
 				index += 1
 				idx_now := index
-				err := writeToCSV(idx_now, float64(opr2), float64(opr1), "^", [5]int{global_TimeAddition, global_TimeSubtraction, global_TimeMultiplication, global_TimeDivision, global_TimeExponentiation})
+				err := writeToCSV(idx_now, float64(opr2), float64(opr1), "^", global_users_time[token])
 				if err != nil {
 					fmt.Println("Error:", err)
 				} else {
@@ -476,14 +520,14 @@ func evaluationPostfix(postfix []string) float64 {
 			case "+":
 				index += 1
 				idx_now := index
-				err := writeToCSV(index, float64(opr2), float64(opr1), "+", [5]int{global_TimeAddition, global_TimeSubtraction, global_TimeMultiplication, global_TimeDivision, global_TimeExponentiation})
+				err := writeToCSV(index, float64(opr2), float64(opr1), "+", global_users_time[token])
 				if err != nil {
 					fmt.Println("Error:", err)
 				} else {
 					fmt.Println("Data written successfully")
 				}
 
-				for true {
+				for {
 					ansMutex.Lock()
 					answer, err = checkAndReplaceIndex(idx_now, global_path_answer_csv)
 					if err == nil {
@@ -493,12 +537,11 @@ func evaluationPostfix(postfix []string) float64 {
 					ansMutex.Unlock()
 					time.Sleep(time.Second)
 				}
-				fmt.Println(answer)
 				intStack.Push(answer)
 			case "-":
 				index += 1
 				idx_now := index
-				err := writeToCSV(index, float64(opr2), float64(opr1), "-", [5]int{global_TimeAddition, global_TimeSubtraction, global_TimeMultiplication, global_TimeDivision, global_TimeExponentiation})
+				err := writeToCSV(index, float64(opr2), float64(opr1), "-", global_users_time[token])
 				if err != nil {
 					fmt.Println("Error:", err)
 				} else {
@@ -520,7 +563,7 @@ func evaluationPostfix(postfix []string) float64 {
 			case "*":
 				index += 1
 				idx_now := index
-				err := writeToCSV(index, float64(opr2), float64(opr1), "*", [5]int{global_TimeAddition, global_TimeSubtraction, global_TimeMultiplication, global_TimeDivision, global_TimeExponentiation})
+				err := writeToCSV(index, float64(opr2), float64(opr1), "*", global_users_time[token])
 				if err != nil {
 					fmt.Println("Error:", err)
 				} else {
@@ -542,7 +585,7 @@ func evaluationPostfix(postfix []string) float64 {
 			case "/":
 				index += 1
 				idx_now := index
-				err := writeToCSV(index, float64(opr2), float64(opr1), "/", [5]int{global_TimeAddition, global_TimeSubtraction, global_TimeMultiplication, global_TimeDivision, global_TimeExponentiation})
+				err := writeToCSV(index, float64(opr2), float64(opr1), "/", global_users_time[token])
 				if err != nil {
 					fmt.Println("Error:", err)
 				} else {
@@ -567,7 +610,7 @@ func evaluationPostfix(postfix []string) float64 {
 	return intStack.Top()
 }
 
-func main_work(infixExpression string, id_loc int) {
+func main_work(infixExpression string, id_loc int, token string) {
 	record := Record{
 		Expression: infixExpression,
 		ID:         id_loc,
@@ -586,6 +629,7 @@ func main_work(infixExpression string, id_loc int) {
 
 	lol, err := getDataByID(id_loc, global_path_expression_csv)
 	if err != nil {
+		fmt.Println("Error:", err)
 		record := Record{
 			Expression: infixExpression,
 			ID:         id_loc,
@@ -616,10 +660,10 @@ func main_work(infixExpression string, id_loc int) {
 
 		postfixExpression := infixToPostfix(infixExpression) // постфиксная форма
 
-		result := evaluationPostfix(postfixExpression)
+		result := evaluationPostfix(postfixExpression, token)
 
 		// defer
-		fmt.Println("Result:", result) // Expected output: 10
+		fmt.Println("Task ID", id_loc, "result:", result) // Expected output: 10
 		fileMutex.Lock()
 		lol, _ := getDataByID(id_loc, global_path_expression_csv)
 		lol.Answer = fmt.Sprint(result)
@@ -669,7 +713,7 @@ func CheckAgent() {
 	servers := make([]Server, 0)
 	for _, record := range records {
 		port, _ := strconv.Atoi(record[0])
-		lastTime, _ := time.Parse("2006-01-02 15:04:05", record[1])
+		lastTime, _ := time.Parse("2006-01-02 15:04:05 -0700 MST", record[1])
 		free, _ := strconv.Atoi(record[2])
 		total, _ := strconv.Atoi(record[3])
 		servers = append(servers, Server{Port: port, LastTime: lastTime, Free: free, Total: total})
@@ -679,18 +723,30 @@ func CheckAgent() {
 	for i := len(servers) - 1; i >= 0; i-- {
 		server := servers[i]
 		// Проверяем, что время последней активности сервера было более  5 минут назад
-		if time.Since(server.LastTime).Minutes()+float64(global_min_to_add) > 5 {
-			// Выполняем GET-запрос
-			resp, err := http.Get(fmt.Sprintf("http://localhost:%d", server.Port))
-			if err != nil || resp.StatusCode != http.StatusOK {
-				// Если запрос не удался, удаляем сервер
-				servers = append(servers[:i], servers[i+1:]...)
+		if time.Since(server.LastTime).Minutes() > 2 {
+
+			servers = append(servers[:i], servers[i+1:]...)
+
+		} else if time.Since(server.LastTime).Minutes() > 1 {
+			fmt.Printf("try connect to %d\n", server.Port)
+
+			port := server.Port
+
+			addr := fmt.Sprintf("localhost:%d", port) // используем адрес сервера
+			// установим соединение
+			conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+			if err != nil {
+				log.Println("could not connect to grpc server: ", err)
 			}
-			if resp != nil {
-				resp.Body.Close()
-			}
-		} else if time.Since(server.LastTime).Minutes()+float64(global_min_to_add) > 1 {
-			fmt.Println(server.Port)
+			// закроем соединение, когда выйдем из функции
+			defer conn.Close()
+			/// ..будет продолжение
+
+			grpcClient := pb.NewGeometryServiceClient(conn)
+
+			_, err = grpcClient.UpdateAgent(context.TODO(), &pb.Empty{})
+
 			_, _ = http.Get(fmt.Sprintf("http://localhost:%d", server.Port))
 			return
 		}
@@ -715,7 +771,7 @@ func CheckAgent() {
 	for _, server := range servers {
 		record := []string{
 			strconv.Itoa(server.Port),
-			server.LastTime.Format("2006-01-02 15:04:05"),
+			server.LastTime.Format("2006-01-02 15:04:05 -0700 MST"),
 			strconv.Itoa(server.Free),
 			strconv.Itoa(server.Total),
 		}
@@ -903,16 +959,145 @@ func WriteSingleRowToCSV(filename, row string) error {
 	return nil
 }
 
+// ////////////////////////////////////регистрация
+func checkDuplicateLogin(login string) (bool, error) {
+	file, err := os.Open(global_path_users_csv)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return false, err
+	}
+
+	for _, record := range records {
+		if record[0] == login {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// generateToken генерирует токен (ваш код генерации токена)
+func generateToken(login, password string) string {
+	const hmacSampleSecret = "super_secret_signature"
+	now := time.Now()
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"login":    login,
+		"password": password,
+		"nbf":      now.Unix(),
+		"exp":      now.Add(1000 * time.Minute).Unix(),
+		"iat":      now.Unix(),
+	})
+
+	tokenString, err := token.SignedString([]byte(hmacSampleSecret))
+	if err != nil {
+		panic(err)
+	}
+	return tokenString
+}
+
+// addUser добавляет пользователя в CSV файл.
+func addUser(login, password string) error {
+	file, err := os.OpenFile(global_path_users_csv, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	token := generateToken(login, password)
+	err = writer.Write([]string{login, password, token})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Регистрирует нового пользователя. Если логин уже существует, возвращает ошибку.
+func registerUser(login, password string) error {
+	exists, err := checkDuplicateLogin(login)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("login %s already exists", login)
+	}
+
+	err = addUser(login, password)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func findToken(login, password string) (string, error) {
+	// Открываем CSV-файл
+	file, err := os.Open(global_path_users_csv)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Создаем ридер CSV
+	reader := csv.NewReader(file)
+
+	// Читаем все записи
+	records, err := reader.ReadAll()
+	if err != nil {
+		return "", err
+	}
+
+	// Проходим по записям и ищем нужные логин и пароль
+	for _, record := range records {
+		user := User{
+			Login:    record[0],
+			Password: record[1],
+			Token:    record[2],
+		}
+		if user.Login == login && user.Password == password {
+			return user.Token, nil
+		}
+	}
+
+	// Если не нашли соответствия, возвращаем пустую строку и ошибку
+	return "", fmt.Errorf("login/password combination not found")
+}
+
+func checkDuplicateToken(token string) (bool, error) {
+	file, err := os.Open(global_path_users_csv)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return false, err
+	}
+
+	for _, record := range records {
+		if record[2] == token {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 var index int
 
 var fileMutex sync.Mutex
 var ansMutex sync.Mutex
-
-var global_TimeAddition int
-var global_TimeSubtraction int
-var global_TimeMultiplication int
-var global_TimeDivision int
-var global_TimeExponentiation int
 
 var global_id int
 
@@ -920,27 +1105,27 @@ var global_path_agent_csv string
 var global_path_answer_csv string
 var global_path_expression_csv string
 var global_path_linglist_csv string
-var global_min_to_add int
+var global_path_users_csv string
+
+var global_users_time map[string][5]int
+var global_id_token map[string]string
 
 func main() {
-	global_path_agent_csv = "agent.csv"
-	global_path_answer_csv = "answer.csv"
-	global_path_expression_csv = "expression.csv"
-	global_path_linglist_csv = "long_list.csv"
-
-	global_min_to_add = 180
+	global_path_agent_csv = "..\\data\\agent.csv"
+	global_path_answer_csv = "..\\data\\answer.csv"
+	global_path_expression_csv = "..\\data\\expression.csv"
+	global_path_linglist_csv = "..\\data\\long_list.csv"
+	global_path_users_csv = "..\\data\\users.csv"
+	global_users_time = make(map[string][5]int)
+	global_id_token = make(map[string]string)
 
 	index = 0
 	global_id = 0
-	global_TimeAddition = 1
-	global_TimeSubtraction = 1
-	global_TimeMultiplication = 1
-	global_TimeDivision = 1
-	global_TimeExponentiation = 1
 
 	WriteSingleRowToCSV(global_path_answer_csv, "index,answer")
 	WriteSingleRowToCSV(global_path_expression_csv, "expression,id,time in,time out,answer,error")
 	WriteSingleRowToCSV(global_path_linglist_csv, "index,json")
+	WriteSingleRowToCSV(global_path_users_csv, "login,password,token")
 
 	go func() {
 		for {
@@ -955,9 +1140,60 @@ func main() {
 	http.HandleFunc("/agents", getHandler1)
 	http.HandleFunc("/expressions", getHandler2)
 
+	http.HandleFunc("/register", registration)
+	http.HandleFunc("/login", loginhandler)
+
 	http.ListenAndServe(":8080", nil)
 }
+func loginhandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
 
+	var data Login
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	token, err := findToken(data.Login, data.Password)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	global_users_time[token] = [5]int{1, 1, 1, 1, 1}
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, token)
+	fmt.Println("Login done OK")
+}
+
+func registration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var data Login
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = registerUser(data.Login, data.Password)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Пример обработки данных из JSON
+	fmt.Println("Rigistratione done OK")
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// int{global_TimeAddition, global_TimeSubtraction, global_TimeMultiplication, global_TimeDivision, global_TimeExponentiation}
 func postHandler1(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -971,15 +1207,33 @@ func postHandler1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Пример обработки данных из JSON
-	fmt.Printf("OK")
-	global_TimeAddition = timeOp.TimeAddition
-	global_TimeDivision = timeOp.TimeDivision
-	global_TimeExponentiation = timeOp.TimeExponentiation
-	global_TimeMultiplication = timeOp.TimeMultiplication
-	global_TimeSubtraction = timeOp.TimeSubtraction
-	// Здесь можно добавить  логику обработки данных, например, выполнение математических операций
+	authHeader := r.Header.Get("Authorization")
 
+	// Проверяем, что заголовок Authorization установлен и начинается с "Bearer "
+	if authHeader == "" {
+		fmt.Fprintln(w, "Отсутствует заголовок Authorization")
+		return
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		fmt.Fprintln(w, "Неверный формат токена")
+		return
+	}
+
+	// Извлекаем токен из заголовка Authorization
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+
+	ans, err := checkDuplicateToken(token)
+	if !ans || err != nil {
+		fmt.Fprintln(w, err)
+		fmt.Fprintln(w, ans)
+		fmt.Fprintln(w, token)
+		http.Error(w, "Problem with token", http.StatusMethodNotAllowed)
+		return
+	}
+	global_users_time[token] = [5]int{timeOp.TimeAddition, timeOp.TimeSubtraction, timeOp.TimeMultiplication, timeOp.TimeDivision, timeOp.TimeExponentiation}
+
+	fmt.Printf("Get time")
+	fmt.Fprintln(w, "Get time")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -989,8 +1243,32 @@ func postHandler2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	authHeader := r.Header.Get("Authorization")
+
+	// Проверяем, что заголовок Authorization установлен и начинается с "Bearer "
+	if authHeader == "" {
+		fmt.Fprintln(w, "Отсутствует заголовок Authorization")
+		return
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		fmt.Fprintln(w, "Неверный формат токена")
+		return
+	}
+
+	// Извлекаем токен из заголовка Authorization
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+
+	ans, err := checkDuplicateToken(token)
+	if !ans || err != nil {
+		fmt.Fprintln(w, err)
+		fmt.Fprintln(w, ans)
+		fmt.Fprintln(w, token)
+		http.Error(w, "Problem with token", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var expr Expression
-	err := json.NewDecoder(r.Body).Decode(&expr)
+	err = json.NewDecoder(r.Body).Decode(&expr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -999,7 +1277,8 @@ func postHandler2(w http.ResponseWriter, r *http.Request) {
 	// Пример обработки данных из JSON
 	fmt.Printf("Received expression: %s\n", expr.Expression)
 	global_id += 1
-	go main_work(expr.Expression, global_id)
+	global_id_token[strconv.Itoa(global_id)] = token
+	go main_work(expr.Expression, global_id, token)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -1037,6 +1316,21 @@ func getHandler2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	authHeader := r.Header.Get("Authorization")
+
+	// Проверяем, что заголовок Authorization установлен и начинается с "Bearer "
+	if authHeader == "" {
+		fmt.Fprintln(w, "Отсутствует заголовок Authorization")
+		return
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		fmt.Fprintln(w, "Неверный формат токена")
+		return
+	}
+
+	// Извлекаем токен из заголовка Authorization
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+
 	// Чтение данных из CSV файла expression.csv
 	file, err := os.Open(global_path_expression_csv)
 	if err != nil {
@@ -1054,6 +1348,8 @@ func getHandler2(w http.ResponseWriter, r *http.Request) {
 
 	// Отправка данных в ответе
 	for _, record := range records {
-		fmt.Fprintln(w, strings.Join(record, ","))
+		if global_id_token[record[1]] == token {
+			fmt.Fprintln(w, strings.Join(record, ","))
+		}
 	}
 }

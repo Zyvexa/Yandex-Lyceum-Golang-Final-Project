@@ -2,3 +2,7 @@ curl http://localhost:8080/agents
 curl http://localhost:8080/expressions
 curl -X POST -d @time.json http://localhost:8080/time
 curl -X POST -d @expression.json http://localhost:8080/expression
+curl -X POST -d @login.json http://localhost:8080/register
+curl -X POST -d @login.json http://localhost:8080/login
+
+-H "Authorization: Bearer "

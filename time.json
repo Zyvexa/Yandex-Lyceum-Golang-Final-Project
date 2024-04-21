@@ -1,7 +1,7 @@
 {
-    "timeAddition": 15,
-    "timeSubtraction": 15,
-    "timeMultiplication": 15,
-    "timeDivision": 15,
-    "timeExponentiation": 15
+    "timeAddition": 60,
+    "timeSubtraction": 60,
+    "timeMultiplication": 60,
+    "timeDivision": 60,
+    "timeExponentiation": 60
 }   

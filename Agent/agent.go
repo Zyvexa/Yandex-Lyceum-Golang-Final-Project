@@ -1,18 +1,21 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math"
 	"net"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	pb "github.com/Zyvexa/grps_test/proto"
+	"google.golang.org/grpc"
 )
 
 type Data struct {
@@ -54,7 +57,7 @@ func updateDataFile(portt int) {
 		log.Fatalf("failed to read file: %v", err)
 	}
 
-	currentTime := time.Now().Format("2006-01-02 15:04:05")
+	currentTime := time.Now().Local().Format("2006-01-02 15:04:05 -0700 MST")
 	found := false
 	for idx, record := range records {
 		if len(record) > 0 && idx != 0 {
@@ -95,7 +98,7 @@ func writeToCSV(index int, answer float64) error {
 	defer file.Close()
 
 	// Форматируем строку с индексом и ответом
-	line := fmt.Sprintf("%d,%.2f", index, answer)
+	line := fmt.Sprintf("%d,%.2f\n", index, answer)
 
 	// Записываем строку в файл
 	if _, err := file.WriteString(line); err != nil {
@@ -145,29 +148,42 @@ func calculate(num1, num2 float64, operation string, time_addition, time_subtrac
 	updateDataFile(port)
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost && free < total {
-		decoder := json.NewDecoder(r.Body)
+// //////////////////grps
+type Server struct {
+	pb.GeometryServiceServer // сервис из сгенерированного пакета
+}
 
-		var data Data
-		err := decoder.Decode(&data)
+func NewServer() *Server {
+	return &Server{}
+}
 
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		fmt.Fprintf(w, "Accepted for processing")
-		free += 1
-		updateDataFile(port)
-		go calculate(data.Num1, data.Num2, data.Operation, data.TimeAddition, data.TimeSubtraction, data.TimeMultiplication, data.TimeDivision, data.TimeExponentiation, data.Index)
+func (s *Server) SendDataToAgent(
+	ctx context.Context,
+	in *pb.Data,
+) (*pb.Empty, error) {
 
-	} else if r.Method == http.MethodPost {
-		updateDataFile(port)
-		http.Error(w, "Server is not free", http.StatusMethodNotAllowed)
-	} else {
-		updateDataFile(port)
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	var data Data
+	err := json.Unmarshal([]byte(in.Json), &data)
+
+	if err != nil {
+		fmt.Println("ERROR")
+		return &pb.Empty{}, err
 	}
+	fmt.Println("Accepted for processing")
+	free += 1
+	updateDataFile(port)
+	go calculate(data.Num1, data.Num2, data.Operation, data.TimeAddition, data.TimeSubtraction, data.TimeMultiplication, data.TimeDivision, data.TimeExponentiation, data.Index)
+
+	return &pb.Empty{}, nil
+}
+
+func (s *Server) UpdateAgent(
+	ctx context.Context,
+	in *pb.Empty,
+) (*pb.Empty, error) {
+	updateDataFile(port)
+	fmt.Println("Update")
+	return &pb.Empty{}, nil
 }
 
 var ansMutex sync.Mutex
@@ -181,8 +197,9 @@ var global_path_agent_csv string
 var global_path_answer_csv string
 
 func main() {
-	global_path_agent_csv = "C:\\codes\\Yandex Golang\\Sprint2\\agent.csv"
-	global_path_answer_csv = "C:\\codes\\Yandex Golang\\Sprint2\\answer.csv"
+
+	global_path_agent_csv = "..\\data\\agent.csv"
+	global_path_answer_csv = "..\\data\\answer.csv"
 
 	free = 0
 	fmt.Print("Введите максимальное количество операций: ")
@@ -194,6 +211,8 @@ func main() {
 
 	fmt.Println("Максимальное количество - ", total)
 
+	host := "localhost"
+
 	port, err = findFreePort(9000)
 	if err != nil {
 		log.Fatalf("Error finding free port: %v", err)
@@ -202,8 +221,25 @@ func main() {
 
 	updateDataFile(port)
 
-	http.HandleFunc("/", handler)
-	addr := fmt.Sprintf(":%d", port)
-	log.Printf("Server is running on  http://localhost:%d/", port)
-	http.ListenAndServe(addr, nil)
+	addr := fmt.Sprintf("%s:%d", host, port)
+	lis, err := net.Listen("tcp", addr) // будем ждать запросы по этому адресу
+
+	if err != nil {
+		log.Println("error starting tcp listener: ", err)
+		os.Exit(1)
+	}
+
+	log.Println("tcp listener started at port: ", port)
+	// создадим сервер grpc
+	grpcServer := grpc.NewServer()
+	// объект структуры, которая содержит реализацию
+	// серверной части GeometryService
+	geomServiceServer := NewServer()
+	// зарегистрируем нашу реализацию сервера
+	pb.RegisterGeometryServiceServer(grpcServer, geomServiceServer)
+	// запустим grpc сервер
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Println("error serving grpc: ", err)
+		os.Exit(1)
+	}
 }

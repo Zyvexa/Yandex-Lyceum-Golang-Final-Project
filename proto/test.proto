@@ -1,0 +1,17 @@
+syntax = "proto3"; // версия proto файлов
+package test; // название пакета
+option go_package = "github.com/Zyvexa/grps_test/proto";
+
+// Сообщение, описывающее параметры прямоугольника
+message Data {
+  string json = 1;
+}
+message Empty{}
+
+
+// Определение сервиса с двумя методами
+service GeometryService {
+	// методы, которые можно будет реализовать и использовать 
+    rpc Update_agent (Empty) returns (Empty); 
+    rpc Send_data_to_agent (Data) returns (Empty);
+}
