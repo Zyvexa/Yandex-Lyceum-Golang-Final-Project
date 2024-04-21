@@ -1348,7 +1348,7 @@ func getHandler2(w http.ResponseWriter, r *http.Request) {
 
 	// Отправка данных в ответе
 	for _, record := range records {
-		if global_id_token[record[1]] == token {
+		if global_id_token[record[1]] == token || record[1] == "id" {
 			fmt.Fprintln(w, strings.Join(record, ","))
 		}
 	}
