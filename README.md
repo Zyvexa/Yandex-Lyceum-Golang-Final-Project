@@ -18,7 +18,7 @@
 
 
 ## Как это запустить
-**Видео иструкция**   
+**[Видео иструкция запуска](https://youtu.be/b5SB9wZZNzM)**   
 1. Копируем репозиторий 
 ```commandline 
 git clone https://github.com/Zyvexa/Yandex-Lyceum-Golang-Final-Project
@@ -33,6 +33,7 @@ set GO111MODULE=on
 
 
 ## Тестовые сценарии
+**[Видео иструкция теста](https://youtu.be/b5SB9wZZNzM?t=94)**
 **Все должно быть запущено как в предыдущем пункте**   
 ### Первый тест
 Файлы:   
@@ -82,7 +83,7 @@ curl -X POST -H "Authorization: Bearer Ваш_токен" -d @time.json http://l
 ```
 Отправим выражение
 ```commandline 
-curl -X POST -H "Authorization: Bearer Ваш_токен" -d @expression.json http://localhost:8080/expression
+curl -X POST -H "Authorization: Bearer Ваш_токен" -d @expression.json http://localhost:8080/expression 
 ```
 Ждем 10 секунд 
 ```commandline 
@@ -280,4 +281,4 @@ curl -H "Authorization: Bearer Ваш_токен" http://localhost:8080/expressi
 ```commandline 
 curl http://localhost:8080/agents
 ```
-**Возвращает список выражений в формате: port - порт, last_time - последнее время активности, free - свободных мест, total - всего мест**
+**Возвращает список выражений в формате: port - порт, last_time - последнее время активности, free - свободных мест, total - всего мест** 
