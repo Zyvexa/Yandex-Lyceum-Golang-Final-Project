@@ -24,8 +24,8 @@
 git clone https://github.com/Zyvexa/Yandex-Lyceum-Golang-Final-Project
 ```  
 2. Открываем в этой папке 4 cmd (2 для пользователей и 2 для оркестратора и агента), для оркестратора нужно перейти в папку _Main_, для агента в  _Agent_.
-3. Устананавливаем все для JWT и GRPC (как в уроках)(https://lms.yandex.ru/courses/1051/groups/9299/lessons/6683/tasks/51780 и https://lms.yandex.ru/courses/1051/groups/9299/lessons/6690/tasks/51796) 
-4. В консоли для агента и оркестратора
+3. Устананавливаем все для JWT и GRPC (как в уроках)(https://lms.yandex.ru/courses/1051/groups/9299/lessons/6683/tasks/51780 и https://lms.yandex.ru/courses/1051/groups/9299/lessons/6690/tasks/51796)
+4. В cmd для агента и оркестратора
 ```commandline 
 set GO111MODULE=on 
 ``` 
@@ -66,7 +66,7 @@ go run main.go
 ```
 **В папке Agent**
 ```commandline 
-go run agent
+go run agent.go
 ```
 **В окне пользователя**  
 Зарегестрируемся и войдем
@@ -113,7 +113,7 @@ go run main.go
 ```
 **В папке Agent**
 ```commandline 
-go run agent
+go run agent.go
 ```
 **В первом окне пользователя**  
 Зарегестрируемся и войдем
@@ -181,7 +181,7 @@ go run main.go
 ```
 **В папке Agent**
 ```commandline 
-go run agent
+go run agent.go
 ```
 **В первом окне пользователя**  
 ```commandline 
