@@ -24,7 +24,11 @@
 git clone https://github.com/Zyvexa/Yandex-Lyceum-Golang-Final-Project
 ```  
 2. Открываем в этой папке 4 cmd (2 для пользователей и 2 для оркестратора и агента), для оркестратора нужно перейти в папку _Main_, для агента в  _Agent_.
-3. Устананавливаем все для JWT и GRPC (как в уроках)   
+3. Устананавливаем все для JWT и GRPC (как в уроках)  
+4. В консоли для агента и оркестратора
+```commandline 
+set GO111MODULE=on 
+``` 
 **Теперь все запущенно и готово к работе**
 
 
@@ -73,6 +77,9 @@ curl -X POST -d @login.json http://localhost:8080/register
 curl -X POST -d @login.json http://localhost:8080/login
 ```
 Тут вернется jwt токен которы нужно будет скопировать и истпользовать   
+```commandline 
+curl -X POST -H "Authorization: Bearer Ваш_токен" -d @time.json http://localhost:8080/time
+```
 Отправим выражение
 ```commandline 
 curl -X POST -H "Authorization: Bearer Ваш_токен" -d @expression.json http://localhost:8080/expression 
@@ -233,7 +240,7 @@ curl -X POST -H "Authorization: Bearer Ваш_токен" -d @expression.json ht
 ```
 пример с токеном(ваш токен будет другим):
 ```commandline 
-curl -X POST -H "Authorization: Bearer Ваш_токен" -d @expression.json http://localhost:8080/expression 
+curl -X POST -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTM3NjMyNjMsImlhdCI6MTcxMzcwMzI2MywibG9naW4iOiIxIiwibmJmIjoxNzEzNzAzMjYzLCJwYXNzd29yZCI6IjEifQ.desjokdTHKf1NXzrXyzF7iXzRPHyjpXVQFPcIY_QZnk" -d @expression.json http://localhost:8080/expression 
 ```
 expression.json : 
 ```json 
@@ -273,4 +280,4 @@ curl -H "Authorization: Bearer Ваш_токен" http://localhost:8080/expressi
 ```commandline 
 curl http://localhost:8080/agents
 ```
-**Возвращает список выражений в формате: port - порт, last_time - последнее время активности, free - свободных мест, total - всего мест** 
+**Возвращает список выражений в формате: port - порт, last_time - последнее время активности, free - свободных мест, total - всего мест**
