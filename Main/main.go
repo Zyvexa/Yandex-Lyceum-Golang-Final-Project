@@ -1233,8 +1233,8 @@ func postHandler1(w http.ResponseWriter, r *http.Request) {
 	global_users_time[token] = [5]int{timeOp.TimeAddition, timeOp.TimeSubtraction, timeOp.TimeMultiplication, timeOp.TimeDivision, timeOp.TimeExponentiation}
 
 	fmt.Printf("Get time")
-	fmt.Fprintln(w, "Get time")
 	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Get time")
 }
 
 func postHandler2(w http.ResponseWriter, r *http.Request) {
