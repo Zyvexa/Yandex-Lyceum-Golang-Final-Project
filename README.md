@@ -82,7 +82,7 @@ curl -X POST -H "Authorization: Bearer Ваш_токен" -d @time.json http://l
 ```
 Отправим выражение
 ```commandline 
-curl -X POST -H "Authorization: Bearer Ваш_токен" -d @expression.json http://localhost:8080/expression 
+curl -X POST -H "Authorization: Bearer Ваш_токен" -d @expression.json http://localhost:8080/expression
 ```
 Ждем 10 секунд 
 ```commandline 
