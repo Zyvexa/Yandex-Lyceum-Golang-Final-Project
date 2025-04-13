@@ -1,5 +1,5 @@
 # Yandex Lyceum Golang Final Project
-**Если есть вопросы [пишите](https://t.me/voronkovmaksim) https://t.me/voronkovmaksim**
+**Если есть вопросы [пишите]() ссылка убрана**
 
 
 ## Как это работает 
